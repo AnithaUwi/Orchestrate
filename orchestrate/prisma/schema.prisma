@@ -1,14 +1,128 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("DEVELOPER")
+  status    String   @default("ACTIVE") // ACTIVE, DISABLED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasksAssigned Task[]
+  bookings      Booking[]
+  projectMemberships ProjectMember[]
+  projectsManaged  Project[]   @relation("ProjectPM")
+  tasksCreated     Task[]      @relation("TaskCreator")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  status      String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  pmId        String?
+  deadline    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pm       User?     @relation("ProjectPM", fields: [pmId], references: [id])
+  tasks    Task[]
+  members  ProjectMember[]
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String?    // Optional override role within project? Or just membership.
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  title          String
+  description    String?
+  status         String @default("TODO")
+  priority       String   @default("MEDIUM")
+  estimatedHours Float?
+  actualHours    Float?
+  loggedHours    Float?
+  dueDate        DateTime?
+  createdById    String?
+  
+  projectId      String
+  project        Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  assignedToId   String?
+  assignedTo     User?      @relation(fields: [assignedToId], references: [id])
+  createdBy      User?      @relation("TaskCreator", fields: [createdById], references: [id])
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model Room {
+  id        String    @id @default(uuid())
+  name      String
+  capacity  Int
+  equipment String?
+  location  String?
+  bookings  Booking[]
+  availability Availability[]
+}
+
+model Booking {
+  id          String   @id @default(uuid())
+  roomId      String
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  userId      String?  // Nullable if external booking?
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  guestName   String?
+  guestEmail  String?
+  isExternal  Boolean  @default(false)
+  description String?
+  attendees   String?
+  status      String   @default("confirmed")
+  
+  startTime   DateTime
+  endTime     DateTime
+  title       String
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Availability {
+  id         String   @id @default(uuid())
+  roomId     String
+  date       DateTime
+  hourSlot   String
+  isAvailable Boolean @default(true)
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, date, hourSlot])
+}
+
+// Enum replacements
+// Role: ADMIN, PROJECT_MANAGER, DEVELOPER, STAFF
+// TaskStatus: TODO, IN_PROGRESS, IN_REVIEW, DONE
+// Priority: LOW, MEDIUM, HIGH, CRITICAL
+
+// Models updated to use String instead of Enum
